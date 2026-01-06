@@ -3,145 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Natro Hive</title>
+    <title>BSS Macro Hive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* (Same beautiful CSS as before, just updated JS logic) */
-        :root { --bg: #1e1e2e; --surface: #313244; --primary: #cba6f7; --text: #cdd6f4; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; }
-        .sidebar { width: 220px; background: #181825; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .nav-btn { background: transparent; border: none; color: #a6adc8; padding: 15px; text-align: left; cursor: pointer; font-size: 1.1em; border-radius: 8px; }
-        .nav-btn.active { background: var(--surface); color: var(--primary); font-weight: bold; border-left: 4px solid var(--primary); }
-        .content { flex: 1; padding: 30px; overflow-y: auto; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .card { background: var(--surface); padding: 20px; border-radius: 12px; }
-        .screenshot { width: 100%; height: 180px; background: #111; object-fit: cover; margin-top: 10px; border-radius: 8px; }
-        .log-item { background: #45475a; padding: 10px; margin-bottom: 8px; border-radius: 6px; border-left: 3px solid #a6e3a1; }
-        .hidden { display: none; }
+        body { background-color: #0d1117; color: #e5e7eb; font-family: sans-serif; }
+        .honeycomb {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.15;
+            background: 
+                radial-gradient(circle at 50% 50%, #facc15 0%, transparent 80%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='%23facc15' fill-opacity='0.4' d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100'/%3E%3C/svg%3E");
+            background-size: 56px 100px;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #facc15; border-radius: 10px; }
     </style>
 </head>
 <body>
+    <div class="honeycomb"></div>
+    <div id="app" class="max-w-6xl mx-auto p-6">
+        <h1 class="text-4xl font-black text-center mb-8 text-yellow-400 tracking-tighter uppercase italic">Macro Hive Dashboard</h1>
+        
+        <div id="tabs" class="flex justify-center gap-2 mb-8 flex-wrap"></div>
 
-    <div class="sidebar">
-        <h2>🐝 Hive</h2>
-        <button class="nav-btn active" onclick="setView('dashboard')">Dashboard</button>
-        <button class="nav-btn" onclick="setView('maincro')">Maincro</button>
-        <button class="nav-btn" onclick="setView('altcro')">Altcro</button>
-        <button class="nav-btn" onclick="setView('ducro')">Ducro</button>
-        <button class="nav-btn" onclick="setView('tricro')">Tricro</button>
-    </div>
+        <div class="grid md:grid-cols-2 gap-8">
+            <div class="bg-gray-900/80 border border-yellow-500/30 p-6 rounded-3xl shadow-2xl backdrop-blur-sm">
+                <h2 class="text-xl font-bold mb-4 text-yellow-500 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span> Activity Feed (10m)
+                </h2>
+                <div id="log-container" class="h-[400px] overflow-y-auto custom-scrollbar space-y-2 text-sm font-mono">
+                    <p class="text-gray-500 italic">Connecting to hive...</p>
+                </div>
+            </div>
 
-    <div class="content">
-        <div id="dashboard-view">
-            <h1>Hive Status</h1>
-            <div class="grid" id="hive-grid">Loading...</div>
-        </div>
-
-        <div id="account-view" class="hidden">
-            <h1 id="acc-title">Account</h1>
-            <div id="acc-logs"></div>
+            <div class="bg-gray-900/80 border border-blue-500/30 p-6 rounded-3xl shadow-2xl backdrop-blur-sm">
+                <h2 class="text-xl font-bold mb-4 text-blue-400">Latest Hourly Report</h2>
+                <div id="report-container" class="space-y-6">
+                    <p class="text-gray-500 italic">Waiting for report data...</p>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        // --- CONFIG ---
-        const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL_HERE";
-        const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
-        
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const accounts = ['maincro', 'altcro', 'ducro', 'tricro'];
-        let currentView = 'dashboard';
+        // --- CONFIGURATION ---
+        const SB_URL = 'YOUR_SUPABASE_URL'; 
+        const SB_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const accounts = ['Maincro', 'Altcro', 'Ducro', 'Tricro'];
+        let activeTab = 'Maincro';
 
-        function setView(view) {
-            currentView = view;
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active'); // Note: primitive event handling for brevity
+        const supabase = supabase.createClient(SB_URL, SB_KEY);
 
-            if (view === 'dashboard') {
-                document.getElementById('dashboard-view').classList.remove('hidden');
-                document.getElementById('account-view').classList.add('hidden');
-                fetchDashboard();
-            } else {
-                document.getElementById('dashboard-view').classList.add('hidden');
-                document.getElementById('account-view').classList.remove('hidden');
-                document.getElementById('acc-title').innerText = view.toUpperCase();
-                fetchAccountLogs(view);
-            }
+        // --- RENDER FUNCTIONS ---
+        function renderTabs() {
+            const container = document.getElementById('tabs');
+            container.innerHTML = accounts.map(acc => `
+                <button onclick="setAccount('${acc}')" class="px-6 py-2 rounded-full font-bold transition-all ${activeTab === acc ? 'bg-yellow-500 text-black scale-110 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">
+                    ${acc}
+                </button>
+            `).join('');
         }
 
-        async function fetchDashboard() {
-            const grid = document.getElementById('hive-grid');
-            grid.innerHTML = '';
+        async function refreshData() {
+            // Get Logs
+            const { data: logs } = await supabase.from('macro_logs').select('*').eq('account_name', activeTab).order('created_at', { ascending: false });
+            const logBox = document.getElementById('log-container');
+            logBox.innerHTML = logs?.length ? logs.map(l => `
+                <div class="border-b border-gray-800 pb-1">
+                    <span class="text-yellow-600/70 text-[10px] uppercase">${new Date(l.created_at).toLocaleTimeString()}</span><br/>
+                    ${l.message}
+                </div>
+            `).join('') : '<p class="text-gray-600">No recent events found.</p>';
 
-            for (const acc of accounts) {
-                // Get just the very last log for each account
-                const { data, error } = await supabase
-                    .from('natro_logs')
-                    .select('*')
-                    .eq('account_name', acc)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-
-                if (data && data.length > 0) {
-                    const log = data[0];
-                    const time = new Date(log.created_at).toLocaleTimeString();
-                    grid.innerHTML += `
-                        <div class="card">
-                            <h3>${acc.toUpperCase()}</h3>
-                            <p>Status: <strong>${log.status}</strong></p>
-                            <p>Loc: ${log.location}</p>
-                            <p>Updated: ${time}</p>
-                            ${log.screenshot_url ? `<img src="${log.screenshot_url}" class="screenshot">` : ''}
-                        </div>
-                    `;
-                } else {
-                    grid.innerHTML += `<div class="card"><h3>${acc}</h3><p>Offline</p></div>`;
-                }
-            }
+            // Get Report
+            const { data: r } = await supabase.from('hourly_reports').select('*').eq('account_name', activeTab).maybeSingle();
+            const repBox = document.getElementById('report-container');
+            repBox.innerHTML = r ? `
+                <div><label class="text-xs text-blue-400/60 uppercase">Honey Per Hour</label><p class="text-5xl font-black text-white">${r.hph}</p></div>
+                <div><label class="text-xs text-blue-400/60 uppercase">Session Total</label><p class="text-2xl font-bold text-gray-300">${r.honey_earned}</p></div>
+                <div><label class="text-xs text-blue-400/60 uppercase">Runtime</label><p class="text-lg text-gray-400">${r.runtime}</p></div>
+                <p class="text-[10px] text-gray-600 mt-4 italic text-right font-mono">Last Update: ${new Date(r.updated_at).toLocaleString()}</p>
+            ` : '<p class="text-gray-600 italic">No report received yet.</p>';
         }
 
-        async function fetchAccountLogs(acc) {
-            const container = document.getElementById('acc-logs');
-            container.innerHTML = 'Loading...';
-
-            // Fetch last 50 logs for this account
-            const { data, error } = await supabase
-                .from('natro_logs')
-                .select('*')
-                .eq('account_name', acc)
-                .order('created_at', { ascending: false })
-                .limit(50);
-
-            container.innerHTML = '';
-            if (!data) return;
-
-            data.forEach(log => {
-                const time = new Date(log.created_at).toLocaleTimeString();
-                container.innerHTML += `
-                    <div class="log-item">
-                        <small>${time}</small><br>
-                        <strong>${log.status}</strong> @ ${log.location}
-                        ${log.screenshot_url ? `<br><a href="${log.screenshot_url}" target="_blank">View Screenshot</a>` : ''}
-                    </div>
-                `;
-            });
+        function setAccount(acc) {
+            activeTab = acc;
+            renderTabs();
+            refreshData();
         }
 
-        // Subscribe to Realtime Updates (Auto-refresh)
+        // --- INITIALIZE & REALTIME ---
+        renderTabs();
+        refreshData();
+
+        // Subscribe to changes (Realtime)
         supabase.channel('custom-all-channel')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'natro_logs' },
-                (payload) => {
-                    // Simple refresh logic: just re-fetch the current view
-                    if (currentView === 'dashboard') fetchDashboard();
-                    else if (currentView === payload.new.account_name) fetchAccountLogs(currentView);
-                }
-            )
-            .subscribe();
-
-        // Initial Load
-        fetchDashboard();
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+            refreshData();
+        }).subscribe();
     </script>
 </body>
 </html>
