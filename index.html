@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Natro Hive</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* (Same beautiful CSS as before, just updated JS logic) */
+        :root { --bg: #1e1e2e; --surface: #313244; --primary: #cba6f7; --text: #cdd6f4; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 220px; background: #181825; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .nav-btn { background: transparent; border: none; color: #a6adc8; padding: 15px; text-align: left; cursor: pointer; font-size: 1.1em; border-radius: 8px; }
+        .nav-btn.active { background: var(--surface); color: var(--primary); font-weight: bold; border-left: 4px solid var(--primary); }
+        .content { flex: 1; padding: 30px; overflow-y: auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: var(--surface); padding: 20px; border-radius: 12px; }
+        .screenshot { width: 100%; height: 180px; background: #111; object-fit: cover; margin-top: 10px; border-radius: 8px; }
+        .log-item { background: #45475a; padding: 10px; margin-bottom: 8px; border-radius: 6px; border-left: 3px solid #a6e3a1; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>🐝 Hive</h2>
+        <button class="nav-btn active" onclick="setView('dashboard')">Dashboard</button>
+        <button class="nav-btn" onclick="setView('maincro')">Maincro</button>
+        <button class="nav-btn" onclick="setView('altcro')">Altcro</button>
+        <button class="nav-btn" onclick="setView('ducro')">Ducro</button>
+        <button class="nav-btn" onclick="setView('tricro')">Tricro</button>
+    </div>
+
+    <div class="content">
+        <div id="dashboard-view">
+            <h1>Hive Status</h1>
+            <div class="grid" id="hive-grid">Loading...</div>
+        </div>
+
+        <div id="account-view" class="hidden">
+            <h1 id="acc-title">Account</h1>
+            <div id="acc-logs"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIG ---
+        const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL_HERE";
+        const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const accounts = ['maincro', 'altcro', 'ducro', 'tricro'];
+        let currentView = 'dashboard';
+
+        function setView(view) {
+            currentView = view;
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active'); // Note: primitive event handling for brevity
+
+            if (view === 'dashboard') {
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                document.getElementById('account-view').classList.add('hidden');
+                fetchDashboard();
+            } else {
+                document.getElementById('dashboard-view').classList.add('hidden');
+                document.getElementById('account-view').classList.remove('hidden');
+                document.getElementById('acc-title').innerText = view.toUpperCase();
+                fetchAccountLogs(view);
+            }
+        }
+
+        async function fetchDashboard() {
+            const grid = document.getElementById('hive-grid');
+            grid.innerHTML = '';
+
+            for (const acc of accounts) {
+                // Get just the very last log for each account
+                const { data, error } = await supabase
+                    .from('natro_logs')
+                    .select('*')
+                    .eq('account_name', acc)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (data && data.length > 0) {
+                    const log = data[0];
+                    const time = new Date(log.created_at).toLocaleTimeString();
+                    grid.innerHTML += `
+                        <div class="card">
+                            <h3>${acc.toUpperCase()}</h3>
+                            <p>Status: <strong>${log.status}</strong></p>
+                            <p>Loc: ${log.location}</p>
+                            <p>Updated: ${time}</p>
+                            ${log.screenshot_url ? `<img src="${log.screenshot_url}" class="screenshot">` : ''}
+                        </div>
+                    `;
+                } else {
+                    grid.innerHTML += `<div class="card"><h3>${acc}</h3><p>Offline</p></div>`;
+                }
+            }
+        }
+
+        async function fetchAccountLogs(acc) {
+            const container = document.getElementById('acc-logs');
+            container.innerHTML = 'Loading...';
+
+            // Fetch last 50 logs for this account
+            const { data, error } = await supabase
+                .from('natro_logs')
+                .select('*')
+                .eq('account_name', acc)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            container.innerHTML = '';
+            if (!data) return;
+
+            data.forEach(log => {
+                const time = new Date(log.created_at).toLocaleTimeString();
+                container.innerHTML += `
+                    <div class="log-item">
+                        <small>${time}</small><br>
+                        <strong>${log.status}</strong> @ ${log.location}
+                        ${log.screenshot_url ? `<br><a href="${log.screenshot_url}" target="_blank">View Screenshot</a>` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        // Subscribe to Realtime Updates (Auto-refresh)
+        supabase.channel('custom-all-channel')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'natro_logs' },
+                (payload) => {
+                    // Simple refresh logic: just re-fetch the current view
+                    if (currentView === 'dashboard') fetchDashboard();
+                    else if (currentView === payload.new.account_name) fetchAccountLogs(currentView);
+                }
+            )
+            .subscribe();
+
+        // Initial Load
+        fetchDashboard();
+    </script>
+</body>
+</html>
