@@ -37,7 +37,6 @@
         let activeTab = 'Home';
         const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
 
-        // Utility to calculate time ago
         function timeAgo(date) {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             if (seconds < 60) return `${seconds}s ago`;
@@ -45,8 +44,8 @@
             return `${minutes}m ago`;
         }
 
-        // Get status color (Green if < 5m, Orange if < 10m, Red otherwise)
         function getStatusColor(date) {
+            if (!date) return 'bg-gray-700';
             const minutes = Math.floor((new Date() - new Date(date)) / 1000 / 60);
             if (minutes < 5) return 'bg-green-500';
             if (minutes < 10) return 'bg-orange-500';
@@ -67,44 +66,48 @@
             const content = document.getElementById('content');
 
             if (activeTab === 'Home') {
-                const { data: allReports } = await supabaseClient.from('hourly_reports').select('*');
-                const reportMap = {};
-                allReports?.forEach(r => reportMap[r.account_name] = r);
+                // Fetch latest status from logs to show current activity on Home cards
+                const { data: latestLogs } = await supabaseClient.from('macro_logs').select('*').order('created_at', { ascending: false });
+                
+                // Group by account to get the absolute newest message for each
+                const latestMap = {};
+                latestLogs?.forEach(log => {
+                    if (!latestMap[log.account_name]) latestMap[log.account_name] = log;
+                });
 
                 content.innerHTML = `
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         ${accounts.map(acc => {
-                            const r = reportMap[acc];
-                            const statusColor = r ? getStatusColor(r.updated_at) : 'bg-gray-700';
+                            const log = latestMap[acc];
+                            const statusColor = getStatusColor(log?.created_at);
                             return `
                                 <div class="bg-gray-900/90 border border-yellow-500/20 p-6 rounded-3xl backdrop-blur-md shadow-xl relative overflow-hidden">
                                     <div class="absolute top-0 left-0 w-1 h-full ${statusColor}"></div>
                                     <div class="flex justify-between items-center mb-4">
                                         <h3 class="text-xl font-black text-yellow-500 uppercase tracking-tighter">${acc}</h3>
                                         <div class="flex items-center gap-1.5">
-                                            <span class="text-[9px] text-gray-400 uppercase font-mono">${r ? timeAgo(r.updated_at) : 'Offline'}</span>
+                                            <span class="text-[9px] text-gray-400 uppercase font-mono">${log ? timeAgo(log.created_at) : 'Offline'}</span>
                                             <span class="w-2 h-2 rounded-full ${statusColor} ${statusColor === 'bg-green-500' ? 'animate-pulse' : ''}"></span>
                                         </div>
                                     </div>
-                                    ${r ? `
-                                        <div class="space-y-4">
-                                            <div><p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">HPH</p><p class="text-3xl font-black text-green-400 font-mono">${r.hph}</p></div>
-                                            <div><p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Session Honey</p><p class="text-xl font-bold text-gray-200">${r.honey_earned}</p></div>
-                                        </div>
-                                    ` : `<p class="text-gray-600 italic py-10 text-center">No Connection</p>`}
+                                    <div class="h-24 flex flex-col justify-center">
+                                        ${log ? `
+                                            <p class="text-xs text-gray-400 font-mono line-clamp-3">${log.message}</p>
+                                        ` : `<p class="text-gray-600 italic text-center">No Connection</p>`}
+                                    </div>
                                 </div>
                             `;
                         }).join('')}
                     </div>
                 `;
             } else {
-                const { data: logs } = await supabaseClient.from('macro_logs').select('*').eq('account_name', activeTab).order('created_at', { ascending: false });
+                const { data: logs } = await supabaseClient.from('macro_logs').select('*').eq('account_name', activeTab).order('created_at', { ascending: false }).limit(50);
                 const { data: report } = await supabaseClient.from('hourly_reports').select('*').eq('account_name', activeTab).maybeSingle();
 
                 content.innerHTML = `
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div class="lg:col-span-2 bg-gray-900/90 p-6 rounded-3xl border border-gray-800 h-[500px] flex flex-col shadow-2xl">
-                            <h2 class="text-xl font-bold mb-4 text-yellow-500">Activity Feed (10m)</h2>
+                            <h2 class="text-xl font-bold mb-4 text-yellow-500">Activity Feed</h2>
                             <div class="overflow-y-auto space-y-2 font-mono text-sm custom-scrollbar pr-2">
                                 ${logs?.length ? logs.map(l => `
                                     <div class="border-b border-gray-800/50 pb-1">
@@ -118,10 +121,10 @@
                             ${report ? `
                                 <div class="space-y-8">
                                     <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Honey Per Hour</label><p class="text-5xl font-black text-white font-mono">${report.hph}</p></div>
-                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Total Honey</label><p class="text-2xl font-bold text-gray-300">${report.honey_earned}</p></div>
-                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Runtime</label><p class="text-lg text-gray-400 font-mono">${report.runtime}</p></div>
+                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Last Honey Earned</label><p class="text-2xl font-bold text-gray-300">${report.honey_earned || '0'}</p></div>
+                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Last Updated</label><p class="text-lg text-gray-400 font-mono">${timeAgo(report.updated_at)}</p></div>
                                 </div>
-                            ` : '<p class="text-gray-600 italic py-10">No report data.</p>'}
+                            ` : '<p class="text-gray-600 italic py-10">No report data found. Run a report in Natro to see stats.</p>'}
                         </div>
                     </div>
                 `;
@@ -130,16 +133,18 @@
 
         function setTab(t) { activeTab = t; renderTabs(); refreshUI(); }
 
+        // Initialize
         renderTabs();
         refreshUI();
 
-        // Refresh every 10 seconds to update the "Time Ago" timers even if no data changes
-        setInterval(refreshUI, 10000);
+        // Auto-refresh every 15s to update "Time Ago"
+        setInterval(refreshUI, 15000);
 
-        supabaseClient.channel('hive-updates')
-        .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-            refreshUI();
-        }).subscribe();
+        // Realtime Subscription
+        supabaseClient.channel('public-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'macro_logs' }, () => refreshUI())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'hourly_reports' }, () => refreshUI())
+        .subscribe();
     </script>
 </body>
 </html>
