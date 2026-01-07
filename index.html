@@ -1,135 +1,169 @@
-// --- CONFIGURATION ---
-const SB_URL = 'https://hbnaoqqyeirjxigzfofl.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhibmFvcXF5ZWlyanhpZ3pmb2ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NTgwNjUsImV4cCI6MjA4MzIzNDA2NX0.5cKEXOCCphXrqiw68hPlVNGBN9WRD_XjmmraIWIfqzM';
-const accounts = ['Maincro', 'Altcro', 'Ducro', 'Tricro'];
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Macro Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background-color: #050505; color: white; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="p-4 md:p-8 font-sans">
 
-let activeTab = 'Home';
-const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+    <div class="max-w-7xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
+            <h1 class="text-3xl font-black tracking-tighter text-white">HIVE<span class="text-yellow-500">WATCH</span></h1>
+            <nav id="tabs" class="flex flex-wrap gap-2 justify-center"></nav>
+        </header>
 
-function timeAgo(date) {
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m ago`;
-}
+        <main id="content">
+            <div class="flex justify-center items-center py-20">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-yellow-500"></div>
+            </div>
+        </main>
+    </div>
 
-function getStatusColor(date) {
-    if (!date) return 'bg-gray-700';
-    const minutes = Math.floor((new Date() - new Date(date)) / 1000 / 60);
-    if (minutes < 5) return 'bg-green-500';
-    if (minutes < 10) return 'bg-orange-500';
-    return 'bg-red-500';
-}
+    <script>
+        // --- CONFIGURATION ---
+        const SB_URL = 'https://hbnaoqqyeirjxigzfofl.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhibmFvcXF5ZWlyanhpZ3pmb2ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NTgwNjUsImV4cCI6MjA4MzIzNDA2NX0.5cKEXOCCphXrqiw68hPlVNGBN9WRD_XjmmraIWIfqzM';
+        const accounts = ['Maincro', 'Altcro', 'Ducro', 'Tricro'];
 
-function renderTabs() {
-    const container = document.getElementById('tabs');
-    const tabs = ['Home', ...accounts];
-    container.innerHTML = tabs.map(t => `
-        <button onclick="setTab('${t}')" class="px-6 py-2 rounded-full font-bold transition-all transform ${activeTab === t ? 'bg-yellow-500 text-black scale-105 shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">
-            ${t === 'Home' ? '🏠 OVERVIEW' : t}
-        </button>
-    `).join('');
-}
+        let activeTab = 'Home';
+        // Initialize Supabase
+        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
 
-async function refreshUI() {
-    const content = document.getElementById('content');
-    
-    // --- SCROLL GUARDIAN: Step 1 ---
-    // Look for the scrollable activity feed if it exists
-    const feed = document.querySelector('.overflow-y-auto');
-    let scrollPos = 0;
-    let shouldSnapToBottom = false;
+        function timeAgo(date) {
+            if (!date) return '...';
+            const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+            if (seconds < 60) return `${seconds}s ago`;
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            return `${hours}h ago`;
+        }
 
-    if (feed) {
-        scrollPos = feed.scrollTop;
-        // Check if user is already at the bottom (within a 50px margin)
-        shouldSnapToBottom = (feed.scrollHeight - feed.offsetHeight) - feed.scrollTop < 50;
-    }
+        function getStatusColor(date) {
+            if (!date) return 'bg-gray-700';
+            const minutes = Math.floor((new Date() - new Date(date)) / 1000 / 60);
+            if (minutes < 5) return 'bg-green-500';
+            if (minutes < 10) return 'bg-orange-500';
+            return 'bg-red-500';
+        }
 
-    if (activeTab === 'Home') {
-        const { data: latestLogs } = await supabaseClient.from('macro_logs').select('*').order('created_at', { ascending: false });
-        const latestMap = {};
-        latestLogs?.forEach(log => {
-            if (!latestMap[log.account_name]) latestMap[log.account_name] = log;
-        });
+        function renderTabs() {
+            const container = document.getElementById('tabs');
+            const tabs = ['Home', ...accounts];
+            container.innerHTML = tabs.map(t => `
+                <button onclick="setTab('${t}')" class="px-6 py-2 rounded-full text-sm font-bold transition-all transform ${activeTab === t ? 'bg-yellow-500 text-black scale-105 shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">
+                    ${t === 'Home' ? '🏠 OVERVIEW' : t.toUpperCase()}
+                </button>
+            `).join('');
+        }
 
-        content.innerHTML = `
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                ${accounts.map(acc => {
-                    const log = latestMap[acc];
-                    const statusColor = getStatusColor(log?.created_at);
-                    return `
-                        <div class="bg-gray-900/90 border border-yellow-500/20 p-6 rounded-3xl backdrop-blur-md shadow-xl relative overflow-hidden">
-                            <div class="absolute top-0 left-0 w-1 h-full ${statusColor}"></div>
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-xl font-black text-yellow-500 uppercase tracking-tighter">${acc}</h3>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[9px] text-gray-400 uppercase font-mono">${log ? timeAgo(log.created_at) : 'Offline'}</span>
-                                    <span class="w-2 h-2 rounded-full ${statusColor} ${statusColor === 'bg-green-500' ? 'animate-pulse' : ''}"></span>
+        async function refreshUI() {
+            const content = document.getElementById('content');
+            
+            const feed = document.getElementById('activityFeed');
+            let scrollPos = 0;
+            let shouldSnapToBottom = false;
+
+            if (feed) {
+                scrollPos = feed.scrollTop;
+                shouldSnapToBottom = (feed.scrollHeight - feed.offsetHeight) - feed.scrollTop < 50;
+            }
+
+            if (activeTab === 'Home') {
+                const { data: latestLogs } = await supabaseClient.from('macro_logs').select('*').order('created_at', { ascending: false });
+                const latestMap = {};
+                latestLogs?.forEach(log => {
+                    if (!latestMap[log.account_name]) latestMap[log.account_name] = log;
+                });
+
+                content.innerHTML = `
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        ${accounts.map(acc => {
+                            const log = latestMap[acc];
+                            const statusColor = getStatusColor(log?.created_at);
+                            return `
+                                <div class="bg-gray-900/90 border border-yellow-500/20 p-6 rounded-3xl backdrop-blur-md shadow-xl relative overflow-hidden">
+                                    <div class="absolute top-0 left-0 w-1 h-full ${statusColor}"></div>
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-xl font-black text-yellow-500 uppercase tracking-tighter">${acc}</h3>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[9px] text-gray-400 uppercase font-mono">${log ? timeAgo(log.created_at) : 'Offline'}</span>
+                                            <span class="w-2 h-2 rounded-full ${statusColor} ${statusColor === 'bg-green-500' ? 'animate-pulse' : ''}"></span>
+                                        </div>
+                                    </div>
+                                    <div class="h-24 flex flex-col justify-center">
+                                        ${log ? `<p class="text-xs text-gray-400 font-mono line-clamp-3">${log.message}</p>` : `<p class="text-gray-600 italic text-center">No Connection</p>`}
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="h-24 flex flex-col justify-center">
-                                ${log ? `<p class="text-xs text-gray-400 font-mono line-clamp-3">${log.message}</p>` : `<p class="text-gray-600 italic text-center">No Connection</p>`}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-    } else {
-        const { data: logs } = await supabaseClient.from('macro_logs').select('*').eq('account_name', activeTab).order('created_at', { ascending: false }).limit(50);
-        const { data: report } = await supabaseClient.from('hourly_reports').select('*').eq('account_name', activeTab).maybeSingle();
-
-        content.innerHTML = `
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 bg-gray-900/90 p-6 rounded-3xl border border-gray-800 h-[500px] flex flex-col shadow-2xl">
-                    <h2 class="text-xl font-bold mb-4 text-yellow-500">Activity Feed</h2>
-                    <div id="activityFeed" class="overflow-y-auto space-y-2 font-mono text-sm custom-scrollbar pr-2">
-                        ${logs?.length ? logs.map(l => `
-                            <div class="border-b border-gray-800/50 pb-1">
-                                <span class="text-gray-600 text-[10px] font-bold">${new Date(l.created_at).toLocaleTimeString()}</span> - ${l.message}
-                            </div>
-                        `).join('') : '<p class="text-gray-600 text-center py-20 italic">Waiting for logs...</p>'}
+                            `;
+                        }).join('')}
                     </div>
-                </div>
-                <div class="bg-gray-900/90 p-6 rounded-3xl border border-blue-500/20 shadow-2xl">
-                    <h2 class="text-xl font-bold mb-6 text-blue-400 uppercase tracking-widest italic">Hive Stats</h2>
-                    ${report ? `
-                        <div class="space-y-8">
-                            <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Honey Per Hour</label><p class="text-5xl font-black text-white font-mono">${report.hph}</p></div>
-                            <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Total Honey (OCR)</label><p class="text-2xl font-bold text-gray-300">${report.total_honey || '0'}</p></div>
-                            <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Last Updated</label><p class="text-lg text-gray-400 font-mono">${timeAgo(report.updated_at)}</p></div>
-                            ${report.last_image_url ? `<img src="${report.last_image_url}" class="rounded-lg border border-gray-700 mt-4" />` : ''}
-                        </div>
-                    ` : '<p class="text-gray-600 italic py-10">No report data found.</p>'}
-                </div>
-            </div>
-        `;
-
-        // --- SCROLL GUARDIAN: Step 2 ---
-        // After the HTML is injected, we restore the scroll position
-        const newFeed = document.getElementById('activityFeed');
-        if (newFeed) {
-            if (shouldSnapToBottom) {
-                newFeed.scrollTop = newFeed.scrollHeight;
+                `;
             } else {
-                newFeed.scrollTop = scrollPos;
+                const { data: logs } = await supabaseClient.from('macro_logs').select('*').eq('account_name', activeTab).order('created_at', { ascending: false }).limit(50);
+                const { data: report } = await supabaseClient.from('hourly_reports').select('*').eq('account_name', activeTab).maybeSingle();
+
+                content.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 bg-gray-900/90 p-6 rounded-3xl border border-gray-800 h-[500px] flex flex-col shadow-2xl">
+                            <h2 class="text-xl font-bold mb-4 text-yellow-500">Activity Feed</h2>
+                            <div id="activityFeed" class="overflow-y-auto space-y-2 font-mono text-sm custom-scrollbar pr-2">
+                                ${logs?.length ? logs.map(l => `
+                                    <div class="border-b border-gray-800/50 pb-1">
+                                        <span class="text-gray-600 text-[10px] font-bold">${new Date(l.created_at).toLocaleTimeString()}</span> - ${l.message}
+                                    </div>
+                                `).join('') : '<p class="text-gray-600 text-center py-20 italic">Waiting for logs...</p>'}
+                            </div>
+                        </div>
+                        <div class="bg-gray-900/90 p-6 rounded-3xl border border-blue-500/20 shadow-2xl">
+                            <h2 class="text-xl font-bold mb-6 text-blue-400 uppercase tracking-widest italic">Hive Stats</h2>
+                            ${report ? `
+                                <div class="space-y-8">
+                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Honey Per Hour</label><p class="text-5xl font-black text-white font-mono">${report.hph}</p></div>
+                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Total Honey (OCR)</label><p class="text-2xl font-bold text-gray-300">${report.total_honey || '0'}</p></div>
+                                    <div><label class="text-[10px] text-blue-400/50 font-bold uppercase block">Last Updated</label><p class="text-lg text-gray-400 font-mono">${timeAgo(report.updated_at)}</p></div>
+                                    ${report.last_image_url ? `<img src="${report.last_image_url}" class="rounded-lg border border-gray-700 mt-4 w-full" />` : ''}
+                                </div>
+                            ` : '<p class="text-gray-600 italic py-10">No report data found.</p>'}
+                        </div>
+                    </div>
+                `;
+
+                const newFeed = document.getElementById('activityFeed');
+                if (newFeed) {
+                    if (shouldSnapToBottom) {
+                        newFeed.scrollTop = newFeed.scrollHeight;
+                    } else {
+                        newFeed.scrollTop = scrollPos;
+                    }
+                }
             }
         }
-    }
-}
 
-function setTab(t) { activeTab = t; renderTabs(); refreshUI(); }
+        function setTab(t) { activeTab = t; renderTabs(); refreshUI(); }
 
-// Initialize
-renderTabs();
-refreshUI();
+        // Initialize
+        renderTabs();
+        refreshUI();
 
-// Auto-refresh every 15s
-setInterval(refreshUI, 15000);
+        // Auto-refresh every 15s
+        setInterval(refreshUI, 15000);
 
-// Realtime Subscription
-supabaseClient.channel('public-updates')
-.on('postgres_changes', { event: '*', schema: 'public', table: 'macro_logs' }, () => refreshUI())
-.on('postgres_changes', { event: '*', schema: 'public', table: 'hourly_reports' }, () => refreshUI())
-.subscribe();
+        // Realtime Subscription
+        supabaseClient.channel('public-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'macro_logs' }, () => refreshUI())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'hourly_reports' }, () => refreshUI())
+        .subscribe();
+    </script>
+</body>
+</html>
